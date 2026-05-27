@@ -1,4 +1,5 @@
 from typing import Any
+from selenium_driverless.types.by import By
 
 class button_sleep:
     general: float = 0.50
@@ -6,6 +7,12 @@ class button_sleep:
     retry:   float = 0.15
     typing:  float = 0.02
     action:  float = 0.25
+
+class fields:
+    example_input: tuple[str, str] = (By.XPATH, "/html/body/main/div/form/input")
+
+class buttons:
+    example_button: tuple[str, str] = (By.XPATH, "/html/body/main/div/form/button")
 
 def make_arguments(device: object, config: object) -> list[str]:
     disable_features: list[str] = [
