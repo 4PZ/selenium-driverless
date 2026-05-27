@@ -6,7 +6,7 @@ filterwarnings("ignore")
 
 from helpers.devices       import IPhone, IPhoneSE, IPhone11, IPhone12, IPhone13, IPhone14, IPhone15
 from helpers.logger        import Logger, bold
-from helpers.events        import set_idle_override, set_touch_points, set_cores, set_dark_mode, set_touch_mode, set_network_enable, set_mobile_metrics, set_user_agent_metadata, set_focus_emulation, load_scripts
+from helpers.events        import set_idle_override, set_touch_points, set_cores, set_dark_mode, set_touch_mode, set_network_enable, set_mobile_metrics, set_user_agent_metadata, set_focus_emulation, load_scripts, set_geolocation
 from helpers.resources     import make_prefs, make_arguments, button_sleep, fields, buttons
 from helpers.utils         import directories, scripts
 from selenium_driverless   import webdriver
@@ -18,9 +18,11 @@ class Base:
 
     class config:
         debug:      bool = False
+        trustscore: bool = False
         devtools:   bool = False
         cache:      bool = True
         profiles:   bool = True
+        proxy:      str = ""
 
         binary_location: str = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
         cache_directory: str = str(directories.cache)
@@ -97,6 +99,20 @@ class Base:
         if self.config.scripts:
             load_scripts(driver, self.config.scripts, edit = False)
             log.info(f"Loaded {bold(len(self.config.scripts))} JavaScript file(s)")
+
+        if self.config.proxy:
+            set_geolocation(
+                driver,
+                {
+                    "http": self.config.proxy,
+                    "https": self.config.proxy
+                }
+            )
+
+        if self.config.trustscore:
+            log.info("Navigating to trust score check sites...")
+            await driver.get("https://abrahamjuliot.github.io/creepjs/", wait_load=True)
+            await asyncio.sleep(300000)
 
         log.success("Initialized driver")
 
