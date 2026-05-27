@@ -64,6 +64,9 @@ def make_arguments(device: object, config: object) -> list[str]:
     if getattr(config, "profiles", False):
         arguments.append("--user-data-dir=" + str(config.profile_directory))
 
+    if getattr(config, "proxy", ""):
+        arguments.append("--proxy-server=" + str(config.proxy))
+
     for argument in ["--window-size"]:
         arguments.append(argument + "=" + ",".join([str(device.width), str(device.height + 28)]))
 
