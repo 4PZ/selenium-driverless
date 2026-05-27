@@ -20,5 +20,5 @@ selenium driverless browser automation base with mobile style spoofing and custo
 
 ## notice
 
-this is a starter base meant to be extended for your own automation workflow
+this is a starter base meant to be extended for your own automation workflow,
 webgl javascript spoofing scripts may be outdated and should be reviewed before real use
