@@ -7,7 +7,7 @@ filterwarnings("ignore")
 from helpers.devices       import IPhone, IPhoneSE, IPhone11, IPhone12, IPhone13, IPhone14, IPhone15
 from helpers.logger        import Logger, bold
 from helpers.events        import set_idle_override, set_touch_points, set_cores, set_dark_mode, set_touch_mode, set_network_enable, set_mobile_metrics, set_user_agent_metadata, set_focus_emulation, load_scripts
-from helpers.resources     import make_prefs, make_arguments, button_sleep
+from helpers.resources     import make_prefs, make_arguments, button_sleep, fields, buttons
 from helpers.utils         import directories, scripts
 from selenium_driverless   import webdriver
 
@@ -159,6 +159,18 @@ async def main():
     try:
         await session.start()
         await session.visit()
+
+        await session.element_write(
+            *fields.example_input,
+            keys = "placeholder text",
+            click_on = True,
+            name = "example input"
+        )
+        
+        await session.element_click(
+            *buttons.example_button,
+            name = "example button"
+        )
 
         if session.config.debug:
             await asyncio.sleep(300000)
