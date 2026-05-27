@@ -17,6 +17,7 @@ selenium driverless browser automation base with mobile parameters spoofing and 
 12. custom javascript injection on new documents
 13. cache and profile directory support
 14. proxy support
+15. geolocation spoof
 
 ## notice
 
