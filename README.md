@@ -1,6 +1,6 @@
 # selenium base
 
-selenium driverless browser automation base with mobile style spoofing and custom fingerprint scripts
+selenium driverless browser automation base with mobile parameters spoofing and custom fingerprint scripts
 
 ## what it supports
 1. iphone device spoofing
