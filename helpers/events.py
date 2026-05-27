@@ -1,5 +1,8 @@
 from typing import Any
 from pathlib import Path
+from json import loads
+from urllib.request import build_opener, ProxyHandler
+from urllib.error import URLError, HTTPError
 
 try:
     from .logger     import Logger, bold
@@ -46,6 +49,34 @@ def load_script(driver: Any, file_path: str, edit: bool = True):
 def load_scripts(driver: Any, file_paths: list[str], edit: bool = True):
     for file_path in file_paths:
         load_script(driver, file_path, edit = edit)
+
+def get_coordinates(proxies: dict[str, str]) -> tuple[float | None, float | None]:
+    try:
+        opener = build_opener(ProxyHandler(proxies))
+        response = opener.open("https://ipwho.is/", timeout = 5.0)
+        payload = loads(response.read().decode("utf-8"))
+        return payload.get("latitude"), payload.get("longitude")
+    except (URLError, HTTPError, ValueError) as error:
+        log.warning(f"Could not get coordinates: {error}")
+        return None, None
+
+def set_geolocation(driver: Any, proxies: dict[str, str]):
+    latitude, longitude = get_coordinates(proxies)
+
+    if latitude is None or longitude is None:
+        log.warning("Skipping geolocation override because proxy lookup failed")
+        return
+
+    log.info("Overriding geolocation")
+    execute_event(
+        driver,
+        "Emulation.setGeolocationOverride",
+        {
+            "latitude": latitude,
+            "longitude": longitude,
+            "accuracy": 100
+        }
+    )
 
 def set_user_agent_metadata(driver: Any, device: Any):
     try:
