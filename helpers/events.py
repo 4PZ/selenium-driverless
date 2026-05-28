@@ -1,89 +1,105 @@
-from typing import Any
+from typing import Any, Optional
 from pathlib import Path
-from json import loads
-from urllib.request import build_opener, ProxyHandler
-from urllib.error import URLError, HTTPError
 
-try:
-    from .logger     import Logger, bold
-    from .utils      import directories
-except ImportError:
-    from helpers.logger import Logger, bold
-    from helpers.utils  import directories
+import requests
+from requests.exceptions import RequestException
 
-log: Logger = Logger(prefix = "Browser")
+from helpers.utils import scripts
+from helpers.logger import Logger, bold
+
+log: Logger = Logger()
 
 def execute_event(driver: Any, event: str, command: dict[str, Any]) -> None:
     try:
         driver.execute_cdp_cmd(event, command)
-        log.info(f"Executed event {bold(event)}")
+        log.info(f"Executed event {bold(event)}.")
     except Exception as error:
         log.failure(
-            f"Couldn't execute event {bold(event)}. Exception: {bold(str(error))}"
+            f"Couldn't execute event {bold(event)}. Exception: {bold(str(error))}."
         )
 
 def load_javascript_file(file_path: str, edit: bool = True) -> str:
     js_path = Path(file_path)
-
-    if not js_path.is_absolute():
-        js_path = directories.root / file_path
-
     if not js_path.exists():
         raise FileNotFoundError(f"JavaScript file not found: {file_path}")
-
+    
     try:
-        source: str = js_path.read_text(encoding = "utf-8")
+        with js_path.open(encoding="utf-8") as file:
+            source = file.read()
+        
         if edit:
             return f"({source})()"
         return source
     except IOError as error:
         raise IOError(f"Could not read JavaScript file {file_path}: {error}") from error
 
-def load_script(driver: Any, file_path: str, edit: bool = True):
+
+def load_spoofing_script(driver: Any, device: Any):
+    script_files = [
+        scripts.utils,
+        scripts.chrome_app,
+        scripts.spoof,
+    ]
+    
+    for file_path in script_files:
+        execute_event(
+            driver,
+            "Page.addScriptToEvaluateOnNewDocument",
+            {"source": load_javascript_file(file_path)}
+        )
+
+    script = f"""
+(() => {{
+    Object.defineProperty(Object.getPrototypeOf(navigator), "userAgent", {{get: () => "{device.user_agent}"}})
+    Object.defineProperty(Object.getPrototypeOf(navigator), "appVersion", {{get: () => "{device.user_agent.split('Mozilla/')[1] if 'Mozilla/' in device.user_agent else ''}"}})
+    Object.defineProperty(Object.getPrototypeOf(navigator), "hardwareConcurrency", {{get: () => {device.hardware_concurrency}}})
+    Object.defineProperty(Object.getPrototypeOf(navigator), "maxTouchPoints", {{get: () => {device.max_touch_points}}})
+    Object.defineProperty(Object.getPrototypeOf(navigator), "language", {{get: () => "{device.languages}"}})
+}})()
+""".strip()
+
     execute_event(
         driver,
         "Page.addScriptToEvaluateOnNewDocument",
-        {"source": load_javascript_file(file_path, edit = edit)}
+        {"source": script}
     )
 
-def load_scripts(driver: Any, file_paths: list[str], edit: bool = True):
-    for file_path in file_paths:
-        load_script(driver, file_path, edit = edit)
 
-def get_coordinates(proxies: dict[str, str]) -> tuple[float | None, float | None]:
+def get_coordinates(proxies: dict[str, str]) -> tuple[Optional[float], Optional[float]]:
     try:
-        opener = build_opener(ProxyHandler(proxies))
-        response = opener.open("https://ipwho.is/", timeout = 5.0)
-        payload = loads(response.read().decode("utf-8"))
-        return payload.get("latitude"), payload.get("longitude")
-    except (URLError, HTTPError, ValueError) as error:
+        response = requests.get(
+            "https://ipwho.is/",
+            proxies=proxies,
+            timeout=5.0
+        )
+        response.raise_for_status()
+        obj = response.json()
+        return obj.get("latitude"), obj.get("longitude")
+    except (RequestException, KeyError, ValueError) as error:
         log.warning(f"Could not get coordinates: {error}")
         return None, None
 
 def set_geolocation(driver: Any, proxies: dict[str, str]):
     latitude, longitude = get_coordinates(proxies)
 
-    if latitude is None or longitude is None:
-        log.warning("Skipping geolocation override because proxy lookup failed")
-        return
-
-    log.info("Overriding geolocation")
-    execute_event(
-        driver,
-        "Emulation.setGeolocationOverride",
-        {
-            "latitude": latitude,
-            "longitude": longitude,
-            "accuracy": 100
-        }
-    )
+    if latitude is not None and longitude is not None:
+        log.info("Overriding geolocation.")
+        execute_event(
+            driver,
+            "Emulation.setGeolocationOverride",
+            {
+                "latitude": latitude,
+                "longitude": longitude,
+                "accuracy": 100
+            }
+        )
 
 def set_user_agent_metadata(driver: Any, device: Any):
     try:
         platform_version = device.user_agent.split("iPhone OS ")[1].split(" ")[0].replace("_", ".")
     except (IndexError, AttributeError):
         platform_version = "17.0"
-
+    
     execute_event(
         driver,
         "Network.setUserAgentOverride",
@@ -101,6 +117,27 @@ def set_user_agent_metadata(driver: Any, device: Any):
                 "wow64": False
             }
         }
+    )
+
+def set_canvas_fingerprint(driver: Any):
+    execute_event(
+        driver,
+        "Page.addScriptToEvaluateOnNewDocument",
+        {"source": load_javascript_file(scripts.canvas, edit=False)}
+    )
+
+def set_audio_fingerprint(driver: Any):
+    execute_event(
+        driver,
+        "Page.addScriptToEvaluateOnNewDocument",
+        {"source": load_javascript_file(scripts.audio, edit=False)}
+    )
+
+def load_stealth_script(driver: Any):
+    execute_event(
+        driver,
+        "Page.addScriptToEvaluateOnNewDocument",
+        {"source": load_javascript_file(scripts.stealth_min)}
     )
 
 def set_focus_emulation(driver: Any):
@@ -152,6 +189,13 @@ def set_touch_mode(driver: Any, device: Any):
         {"enabled": device.touch}
     )
 
+def set_blocked_urls(driver: Any, urls: list[str]):
+    execute_event(
+        driver,
+        "Network.setBlockedURLs",
+        {"urls": urls}
+    )
+
 def set_dark_mode(driver: Any, device: Any):
     execute_event(
         driver,
@@ -164,4 +208,20 @@ def set_cores(driver: Any, device: Any) -> None:
         driver,
         "Emulation.setHardwareConcurrencyOverride",
         {"hardwareConcurrency": device.hardware_concurrency}
+    )
+
+def set_fake_webrtc(driver: Any) -> None:
+    script = (
+        "navigator.mediaDevices.getUserMedia = "
+        "navigator.webkitGetUserMedia = "
+        "navigator.mozGetUserMedia = "
+        "navigator.getUserMedia = "
+        "webkitRTCPeerConnection = "
+        "RTCPeerConnection = "
+        "MediaStreamTrack = undefined;"
+    )
+    execute_event(
+        driver,
+        "Page.addScriptToEvaluateOnNewDocument",
+        {"source": script}
     )
