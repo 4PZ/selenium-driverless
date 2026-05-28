@@ -6,7 +6,7 @@ filterwarnings("ignore")
 
 from helpers.devices       import IPhone, IPhoneSE, IPhone11, IPhone12, IPhone13, IPhone14, IPhone15
 from helpers.logger        import Logger, bold
-from helpers.events        import set_idle_override, set_touch_points, set_cores, set_dark_mode, set_touch_mode, set_network_enable, set_mobile_metrics, set_user_agent_metadata, set_focus_emulation, load_scripts, set_geolocation
+from helpers.events        import set_idle_override, set_touch_points, set_cores, set_dark_mode, set_touch_mode, set_network_enable, set_mobile_metrics, set_user_agent_metadata, set_focus_emulation, set_geolocation, load_scripts, load_spoofing_script, set_canvas_fingerprint, set_fake_webrtc, set_blocked_urls, set_audio_fingerprint, load_stealth_script
 from helpers.resources     import make_prefs, make_arguments, button_sleep, fields, buttons
 from helpers.utils         import directories, scripts
 from selenium_driverless   import webdriver
@@ -18,7 +18,7 @@ class Base:
 
     class config:
         debug:      bool = False
-        trustscore: bool = False
+        trustscore: bool = True
         devtools:   bool = False
         cache:      bool = True
         profiles:   bool = True
@@ -29,14 +29,15 @@ class Base:
         profile_directory: str = str(directories.profile)
 
         start_url: str = "https://example.org"
+
+        blocked_urls: list[str] = [
+            # Proof of concept: block a specific request url on every new session.
+            "https://example.org/tracker.js",
+        ]
+
         scripts:   list[str] = [
             scripts.utils,
-            scripts.chrome_app,
-            scripts.audio,
-            scripts.canvas,
             scripts.gpu,
-            scripts.spoof,
-            scripts.stealth_min,
         ]
 
     def __init__(self):
@@ -80,8 +81,12 @@ class Base:
         directories.profile.mkdir(parents = True, exist_ok = True)
 
         for function in [
+            set_fake_webrtc,
             set_network_enable,
             set_focus_emulation,
+            load_stealth_script,
+            set_audio_fingerprint,
+            set_canvas_fingerprint,
         ]:
             function(driver)
 
@@ -91,10 +96,15 @@ class Base:
             set_cores,
             set_dark_mode,
             set_touch_mode,
+            load_spoofing_script,
             set_mobile_metrics,
             set_user_agent_metadata,
         ]:
             function(driver, self.device)
+
+        if self.config.blocked_urls:
+            set_blocked_urls(driver, self.config.blocked_urls)
+            log.info(f"Blocked {bold(len(self.config.blocked_urls))} URL pattern(s)")
 
         if self.config.scripts:
             load_scripts(driver, self.config.scripts, edit = False)
